@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecureBolt Tools — Private File Processing</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- pdf-lib -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- JSZip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#f0f9ff', 100:'#e0f2fe', 500:'#0ea5e9', 600:'#0284c7', 700:'#0369a1', 900:'#0c4a6e' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Glassmorphism card */
+    .glass-card {
+      background: rgba(31, 41, 55, 0.5);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(75, 85, 99, 0.5);
+      border-radius: 1rem;
+    }
+    .light .glass-card, html:not(.dark) .glass-card {
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(209,213,219,0.7);
+    }
+
+    /* Drop zone drag-active */
+    .drop-zone.drag-active {
+      border-color: #0ea5e9 !important;
+      background: rgba(14, 165, 233, 0.08) !important;
+    }
+
+    /* Toast animation */
+    @keyframes slideIn {
+      from { transform: translateX(120%); opacity: 0; }
+      to   { transform: translateX(0);   opacity: 1; }
+    }
+    @keyframes slideOut {
+      from { transform: translateX(0);   opacity: 1; }
+      to   { transform: translateX(120%); opacity: 0; }
+    }
+    .toast-enter { animation: slideIn 0.3s ease forwards; }
+    .toast-exit  { animation: slideOut 0.3s ease forwards; }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 1.25rem;
+      height: 1.25rem;
+      border: 2px solid #0ea5e9;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Tab panel hidden/visible */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Light mode overrides */
+    html:not(.dark) body {
+      background-color: #f0f9ff;
+      color: #0f172a;
+    }
+    html:not(.dark) nav {
+      background-color: #ffffff !important;
+      border-color: #e2e8f0 !important;
+    }
+    html:not(.dark) .bg-gray-800\/50 {
+      background-color: rgba(255,255,255,0.8) !important;
+    }
+    html:not(.dark) .bg-gray-900 {
+      background-color: #ffffff !important;
+    }
+    html:not(.dark) .text-gray-400 {
+      color: #64748b !important;
+    }
+    html:not(.dark) .text-gray-300 {
+      color: #475569 !important;
+    }
+    html:not(.dark) .border-gray-700 {
+      border-color: #e2e8f0 !important;
+    }
+    html:not(.dark) .border-gray-600 {
+      border-color: #cbd5e1 !important;
+    }
+    html:not(.dark) .bg-gray-700 {
+      background-color: #e2e8f0 !important;
+      color: #0f172a !important;
+    }
+    html:not(.dark) .bg-gray-800 {
+      background-color: #f8fafc !important;
+    }
+    html:not(.dark) .bg-gray-950 {
+      background-color: #f0f9ff !important;
+    }
+    html:not(.dark) .text-gray-100 {
+      color: #0f172a !important;
+    }
+    html:not(.dark) .text-gray-200 {
+      color: #1e293b !important;
+    }
+    html:not(.dark) input, html:not(.dark) select {
+      background-color: #f8fafc !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+
+    /* Smooth transitions */
+    * { transition-property: color, background-color, border-color; transition-duration: 200ms; }
+    img, canvas { transition: none; }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+  <!-- ===== NAVBAR ===== -->
+  <nav class="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <!-- Logo -->
+      <div class="flex items-center gap-2">
+        <i data-lucide="shield-check" class="w-7 h-7 text-brand-500"></i>
+        <span class="text-xl font-bold tracking-tight">SecureBolt <span class="text-brand-500">Tools</span></span>
+      </div>
+
+      <!-- Privacy badge -->
+      <div class="hidden md:flex items-center gap-2 bg-green-500/10 border border-green-500/30 text-green-400 text-xs px-3 py-1.5 rounded-full">
+        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"></span>
+        Files never leave your browser
+      </div>
+
+      <!-- Dark/Light toggle -->
+      <button id="theme-toggle" onclick="toggleTheme()" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-all" title="Toggle theme">
+        <i data-lucide="sun" id="icon-sun" class="w-5 h-5 hidden"></i>
+        <i data-lucide="moon" id="icon-moon" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Tab switcher -->
+    <div class="max-w-7xl mx-auto px-6 pb-3 flex gap-2 overflow-x-auto">
+      <button onclick="switchTab('pdf-compress')" id="tab-btn-pdf-compress" class="tab-btn active-tab rounded-full px-4 py-2 text-sm font-medium bg-brand-500 text-white whitespace-nowrap transition-all">
+        PDF Compressor
+      </button>
+      <button onclick="switchTab('image-tools')" id="tab-btn-image-tools" class="tab-btn rounded-full px-4 py-2 text-sm font-medium text-gray-400 hover:text-white whitespace-nowrap transition-all">
+        Image Tools
+      </button>
+      <button onclick="switchTab('pdf-split')" id="tab-btn-pdf-split" class="tab-btn rounded-full px-4 py-2 text-sm font-medium text-gray-400 hover:text-white whitespace-nowrap transition-all">
+        PDF Splitter
+      </button>
+      <button onclick="switchTab('inflator')" id="tab-btn-inflator" class="tab-btn rounded-full px-4 py-2 text-sm font-medium text-gray-400 hover:text-white whitespace-nowrap transition-all">
+        File Inflator
+      </button>
+    </div>
+  </nav>
+
+  <!-- ===== HERO SECTION ===== -->
+  <div class="bg-gradient-to-r from-brand-900/30 via-gray-900/50 to-gray-950 border-b border-gray-800 py-5">
+    <div class="max-w-7xl mx-auto px-6 flex items-center justify-center gap-3 text-center">
+      <span class="text-2xl">🔒</span>
+      <p class="text-sm md:text-base text-gray-300">
+        <span class="font-semibold text-white">100% Private &amp; Local</span>
+        — Your files never leave your browser. Zero servers. Zero storage.
+      </p>
+    </div>
+  </div>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="max-w-7xl mx-auto px-4 md:px-6 py-8">
+
+    <!-- ===================== MODULE 1: PDF COMPRESSOR ===================== -->
+    <div id="tab-pdf-compress" class="tab-panel active">
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold flex items-center gap-2">
+          <i data-lucide="file-down" class="w-6 h-6 text-brand-500"></i>
+          PDF Target-Size Compressor
+        </h2>
+        <p class="text-gray-400 mt-1">Compress any PDF to a specific file size using adaptive quality and scale.</p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Left: Controls -->
+        <div class="space-y-5">
+          <!-- Drop zone -->
+          <div id="compress-drop-zone"
+               class="drop-zone border-2 border-dashed border-gray-600 hover:border-brand-500 rounded-xl p-10 text-center cursor-pointer transition-all"
+               onclick="document.getElementById('compress-file-input').click()"
+               ondragover="handleDragOver(event,'compress-drop-zone')"
+               ondragleave="handleDragLeave(event,'compress-drop-zone')"
+               ondrop="handleDrop(event,'compress',['application/pdf'])">
+            <i data-lucide="upload-cloud" class="w-12 h-12 text-gray-500 mx-auto mb-3"></i>
+            <p class="text-gray-400 font-medium">Drop PDF here or <span class="text-brand-500">browse</span></p>
+            <p class="text-xs text-gray-600 mt-1">PDF files only</p>
+            <input type="file" id="compress-file-input" accept=".pdf,application/pdf" class="hidden" onchange="handleFileSelect(this,'compress',['application/pdf'])">
+          </div>
+          <div id="compress-file-info" class="hidden flex items-center gap-3 bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3">
+            <i data-lucide="file-text" class="w-5 h-5 text-brand-500 flex-shrink-0"></i>
+            <div class="min-w-0">
+              <p id="compress-file-name" class="text-sm font-medium truncate"></p>
+              <p id="compress-file-size" class="text-xs text-gray-400"></p>
+            </div>
+            <button onclick="clearFile('compress')" class="ml-auto text-gray-500 hover:text-red-400 transition-colors">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Target size -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">Target Size</label>
+            <div class="flex flex-wrap gap-2 mb-3">
+              <button onclick="setCompressTarget(100)" class="preset-btn bg-gray-700 hover:bg-brand-600 text-sm px-3 py-1.5 rounded-md transition-all">100 KB</button>
+              <button onclick="setCompressTarget(250)" class="preset-btn bg-gray-700 hover:bg-brand-600 text-sm px-3 py-1.5 rounded-md transition-all">250 KB</button>
+              <button onclick="setCompressTarget(500)" class="preset-btn bg-gray-700 hover:bg-brand-600 text-sm px-3 py-1.5 rounded-md transition-all">500 KB</button>
+              <button onclick="setCompressTarget(1024)" class="preset-btn bg-gray-700 hover:bg-brand-600 text-sm px-3 py-1.5 rounded-md transition-all">1 MB</button>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="number" id="compress-target-kb" placeholder="Custom KB" min="10" max="99999"
+                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500 transition-colors">
+              <span class="text-gray-400 text-sm whitespace-nowrap">KB target</span>
+            </div>
+          </div>
+
+          <!-- Compress button -->
+          <button onclick="compressPDF()" id="compress-btn"
+            class="w-full bg-brand-500 hover:bg-brand-600 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2">
+            <i data-lucide="zap" class="w-5 h-5"></i>
+            Compress PDF
+          </button>
+
+          <!-- Progress -->
+          <div id="compress-progress" class="hidden flex items-center gap-3 text-sm text-gray-400">
+            <span class="spinner"></span>
+            <span id="compress-progress-text">Analyzing pages...</span>
+          </div>
+        </div>
+
+        <!-- Right: Result -->
+        <div id="compress-result" class="hidden">
+          <div class="glass-card p-6 h-full flex flex-col justify-between">
+            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-5 h-5 text-green-400"></i>
+              Compression Complete
+            </h3>
+            <div class="grid grid-cols-2 gap-4 mb-6">
+              <div class="bg-gray-800/60 rounded-lg p-4 text-center">
+                <p class="text-xs text-gray-400 mb-1">Original Size</p>
+                <p id="compress-orig-size" class="text-xl font-bold text-gray-200"></p>
+              </div>
+              <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
+                <p class="text-xs text-green-400 mb-1">New Size</p>
+                <p id="compress-new-size" class="text-xl font-bold text-green-400"></p>
+              </div>
+            </div>
+            <div class="mb-4">
+              <div class="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Reduction</span>
+                <span id="compress-reduction-pct"></span>
+              </div>
+              <div class="w-full bg-gray-700 rounded-full h-2">
+                <div id="compress-reduction-bar" class="bg-green-500 h-2 rounded-full transition-all" style="width:0%"></div>
+              </div>
+            </div>
+            <button id="compress-download-btn" onclick="downloadResult('compress')"
+              class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2">
+              <i data-lucide="download" class="w-5 h-5"></i>
+              Download Compressed PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- Placeholder when no result yet -->
+        <div id="compress-placeholder" class="glass-card p-6 flex flex-col items-center justify-center text-center min-h-48">
+          <i data-lucide="file-down" class="w-16 h-16 text-gray-700 mb-3"></i>
+          <p class="text-gray-500">Your compressed PDF will appear here</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== MODULE 2: IMAGE TOOLS ===================== -->
+    <div id="tab-image-tools" class="tab-panel">
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold flex items-center gap-2">
+          <i data-lucide="image" class="w-6 h-6 text-brand-500"></i>
+          Image Compressor &amp; Format Converter
+        </h2>
+        <p class="text-gray-400 mt-1">Compress images to a target size and convert between JPEG, PNG, and WEBP formats.</p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Left: Controls -->
+        <div class="space-y-5">
+          <!-- Drop zone -->
+          <div id="image-drop-zone"
+               class="drop-zone border-2 border-dashed border-gray-600 hover:border-brand-500 rounded-xl p-10 text-center cursor-pointer transition-all"
+               onclick="document.getElementById('image-file-input').click()"
+               ondragover="handleDragOver(event,'image-drop-zone')"
+               ondragleave="handleDragLeave(event,'image-drop-zone')"
+               ondrop="handleDrop(event,'image',['image/jpeg','image/png','image/webp','image/gif','image/svg+xml'])">
+            <i data-lucide="image-plus" class="w-12 h-12 text-gray-500 mx-auto mb-3"></i>
+            <p class="text-gray-400 font-medium">Drop image here or <span class="text-brand-500">browse</span></p>
+            <p class="text-xs text-gray-600 mt-1">JPEG, PNG, WEBP, GIF, SVG</p>
+            <input type="file" id="image-file-input" accept="image/*" class="hidden" onchange="handleFileSelect(this,'image',['image/jpeg','image/png','image/webp','image/gif','image/svg+xml'])">
+          </div>
+          <div id="image-file-info" class="hidden flex items-center gap-3 bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3">
+            <i data-lucide="image" class="w-5 h-5 text-brand-500 flex-shrink-0"></i>
+            <div class="min-w-0">
+              <p id="image-file-name" class="text-sm font-medium truncate"></p>
+              <p id="image-file-size" class="text-xs text-gray-400"></p>
+            </div>
+            <button onclick="clearFile('image')" class="ml-auto text-gray-500 hover:text-red-400 transition-colors">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Options -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-2">Target Size (KB)</label>
+              <input type="number" id="image-target-kb" placeholder="e.g. 200" min="1" max="99999" value="200"
+                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500 transition-colors">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-2">Output Format</label>
+              <select id="image-format" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500 transition-colors">
+                <option value="image/jpeg">JPEG</option>
+                <option value="image/png">PNG</option>
+                <option value="image/webp">WEBP</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Process button -->
+          <button onclick="compressImage()" id="image-btn"
+            class="w-full bg-brand-500 hover:bg-brand-600 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2">
+            <i data-lucide="wand-2" class="w-5 h-5"></i>
+            Process Image
+          </button>
+
+          <!-- Progress -->
+          <div id="image-progress" class="hidden flex items-center gap-3 text-sm text-gray-400">
+            <span class="spinner"></span>
+            <span>Processing image...</span>
+          </div>
+        </div>
+
+        <!-- Right: Preview & Result -->
+        <div id="image-result" class="hidden">
+          <div class="glass-card p-6">
+            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-5 h-5 text-green-400"></i>
+              Processing Complete
+            </h3>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <p class="text-xs text-gray-400 mb-2 text-center">Original</p>
+                <div class="bg-gray-800/60 rounded-lg p-2 flex items-center justify-center min-h-28">
+                  <img id="image-preview-orig" class="max-h-24 max-w-full rounded object-contain" alt="Original">
+                </div>
+                <p id="image-orig-size" class="text-xs text-center text-gray-400 mt-2"></p>
+              </div>
+              <div>
+                <p class="text-xs text-green-400 mb-2 text-center">Output</p>
+                <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-2 flex items-center justify-center min-h-28">
+                  <img id="image-preview-out" class="max-h-24 max-w-full rounded object-contain" alt="Output">
+                </div>
+                <p id="image-new-size" class="text-xs text-center text-green-400 mt-2"></p>
+              </div>
+            </div>
+            <button id="image-download-btn" onclick="downloadResult('image')"
+              class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2">
+              <i data-lucide="download" class="w-5 h-5"></i>
+              Download Image
+            </button>
+          </div>
+        </div>
+
+        <div id="image-placeholder" class="glass-card p-6 flex flex-col items-center justify-center text-center min-h-48">
+          <i data-lucide="image" class="w-16 h-16 text-gray-700 mb-3"></i>
+          <p class="text-gray-500">Your processed image will appear here</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== MODULE 3: PDF SPLITTER ===================== -->
+    <div id="tab-pdf-split" class="tab-panel">
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold flex items-center gap-2">
+          <i data-lucide="scissors" class="w-6 h-6 text-brand-500"></i>
+          PDF Splitter
+        </h2>
+        <p class="text-gray-400 mt-1">Split a PDF by custom page ranges, individual pages, or every N pages.</p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Left: Controls -->
+        <div class="space-y-5">
+          <!-- Drop zone -->
+          <div id="split-drop-zone"
+               class="drop-zone border-2 border-dashed border-gray-600 hover:border-brand-500 rounded-xl p-10 text-center cursor-pointer transition-all"
+               onclick="document.getElementById('split-file-input').click()"
+               ondragover="handleDragOver(event,'split-drop-zone')"
+               ondragleave="handleDragLeave(event,'split-drop-zone')"
+               ondrop="handleDrop(event,'split',['application/pdf'])">
+            <i data-lucide="file-text" class="w-12 h-12 text-gray-500 mx-auto mb-3"></i>
+            <p class="text-gray-400 font-medium">Drop PDF here or <span class="text-brand-500">browse</span></p>
+            <p class="text-xs text-gray-600 mt-1">PDF files only</p>
+            <input type="file" id="split-file-input" accept=".pdf,application/pdf" class="hidden" onchange="handleFileSelect(this,'split',['application/pdf'])">
+          </div>
+          <div id="split-file-info" class="hidden flex items-center gap-3 bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3">
+            <i data-lucide="file-text" class="w-5 h-5 text-brand-500 flex-shrink-0"></i>
+            <div class="min-w-0 flex-1">
+              <p id="split-file-name" class="text-sm font-medium truncate"></p>
+              <p id="split-file-size" class="text-xs text-gray-400"></p>
+            </div>
+            <span id="split-page-badge" class="text-xs bg-brand-500/20 text-brand-400 border border-brand-500/30 px-2 py-1 rounded-full whitespace-nowrap"></span>
+            <button onclick="clearFile('split')" class="text-gray-500 hover:text-red-400 transition-colors">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Split mode -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-3">Split Mode</label>
+            <div class="space-y-3">
+              <label class="flex items-start gap-3 cursor-pointer group">
+                <input type="radio" name="split-mode" value="range" checked class="mt-0.5 accent-brand-500">
+                <div>
+                  <p class="text-sm font-medium group-hover:text-brand-400 transition-colors">Custom Range</p>
+                  <p class="text-xs text-gray-500">e.g. "1-3, 5, 8-10"</p>
+                </div>
+              </label>
+              <div id="split-range-input-container" class="ml-6">
+                <input type="text" id="split-range-input" placeholder='e.g. 1-3, 5, 8-10'
+                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500">
+              </div>
+
+              <label class="flex items-start gap-3 cursor-pointer group">
+                <input type="radio" name="split-mode" value="all" class="mt-0.5 accent-brand-500">
+                <div>
+                  <p class="text-sm font-medium group-hover:text-brand-400 transition-colors">All Pages</p>
+                  <p class="text-xs text-gray-500">Extract each page as a separate PDF</p>
+                </div>
+              </label>
+
+              <label class="flex items-start gap-3 cursor-pointer group">
+                <input type="radio" name="split-mode" value="every-n" class="mt-0.5 accent-brand-500">
+                <div>
+                  <p class="text-sm font-medium group-hover:text-brand-400 transition-colors">Every N Pages</p>
+                  <p class="text-xs text-gray-500">Group pages into chunks of N</p>
+                </div>
+              </label>
+              <div id="split-every-n-container" class="ml-6 hidden">
+                <input type="number" id="split-every-n-input" placeholder="N" min="1" value="1"
+                  class="w-24 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500">
+                <span class="text-sm text-gray-400 ml-2">pages per PDF</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Split button -->
+          <button onclick="splitPDF()" id="split-btn"
+            class="w-full bg-brand-500 hover:bg-brand-600 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2">
+            <i data-lucide="scissors" class="w-5 h-5"></i>
+            Split PDF
+          </button>
+
+          <!-- Progress -->
+          <div id="split-progress" class="hidden flex items-center gap-3 text-sm text-gray-400">
+            <span class="spinner"></span>
+            <span>Splitting PDF...</span>
+          </div>
+        </div>
+
+        <!-- Right: Results -->
+        <div id="split-result" class="hidden">
+          <div class="glass-card p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold flex items-center gap-2">
+                <i data-lucide="check-circle" class="w-5 h-5 text-green-400"></i>
+                Split Complete
+              </h3>
+              <button id="split-download-all-btn" onclick="downloadAllSplitZip()"
+                class="bg-brand-500 hover:bg-brand-600 text-white text-sm px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1">
+                <i data-lucide="archive" class="w-4 h-4"></i>
+                Download All (ZIP)
+              </button>
+            </div>
+            <div id="split-files-list" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
+          </div>
+        </div>
+
+        <div id="split-placeholder" class="glass-card p-6 flex flex-col items-center justify-center text-center min-h-48">
+          <i data-lucide="scissors" class="w-16 h-16 text-gray-700 mb-3"></i>
+          <p class="text-gray-500">Split PDF files will appear here</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== MODULE 4: FILE INFLATOR ===================== -->
+    <div id="tab-inflator" class="tab-panel">
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold flex items-center gap-2">
+          <i data-lucide="trending-up" class="w-6 h-6 text-brand-500"></i>
+          File Size Inflator
+        </h2>
+        <p class="text-gray-400 mt-1">Increase a file's size to meet minimum size requirements. Supports PDF and image files.</p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Left: Controls -->
+        <div class="space-y-5">
+          <!-- Drop zone -->
+          <div id="inflate-drop-zone"
+               class="drop-zone border-2 border-dashed border-gray-600 hover:border-brand-500 rounded-xl p-10 text-center cursor-pointer transition-all"
+               onclick="document.getElementById('inflate-file-input').click()"
+               ondragover="handleDragOver(event,'inflate-drop-zone')"
+               ondragleave="handleDragLeave(event,'inflate-drop-zone')"
+               ondrop="handleDrop(event,'inflate',['application/pdf','image/jpeg','image/png','image/webp'])">
+            <i data-lucide="upload" class="w-12 h-12 text-gray-500 mx-auto mb-3"></i>
+            <p class="text-gray-400 font-medium">Drop file here or <span class="text-brand-500">browse</span></p>
+            <p class="text-xs text-gray-600 mt-1">PDF, JPEG, PNG, WEBP</p>
+            <input type="file" id="inflate-file-input" accept=".pdf,application/pdf,image/jpeg,image/png,image/webp" class="hidden" onchange="handleFileSelect(this,'inflate',['application/pdf','image/jpeg','image/png','image/webp'])">
+          </div>
+          <div id="inflate-file-info" class="hidden flex items-center gap-3 bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3">
+            <i data-lucide="file" class="w-5 h-5 text-brand-500 flex-shrink-0"></i>
+            <div class="min-w-0">
+              <p id="inflate-file-name" class="text-sm font-medium truncate"></p>
+              <p id="inflate-file-size" class="text-xs text-gray-400"></p>
+            </div>
+            <button onclick="clearFile('inflate')" class="ml-auto text-gray-500 hover:text-red-400 transition-colors">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Target size -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">Minimum Target Size</label>
+            <div class="flex flex-wrap gap-2 mb-3">
+              <button onclick="setInflateTarget(250)" class="preset-btn bg-gray-700 hover:bg-brand-600 text-sm px-3 py-1.5 rounded-md transition-all">250 KB</button>
+              <button onclick="setInflateTarget(500)" class="preset-btn bg-gray-700 hover:bg-brand-600 text-sm px-3 py-1.5 rounded-md transition-all">500 KB</button>
+              <button onclick="setInflateTarget(1024)" class="preset-btn bg-gray-700 hover:bg-brand-600 text-sm px-3 py-1.5 rounded-md transition-all">1 MB</button>
+              <button onclick="setInflateTarget(2048)" class="preset-btn bg-gray-700 hover:bg-brand-600 text-sm px-3 py-1.5 rounded-md transition-all">2 MB</button>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="number" id="inflate-target-kb" placeholder="Custom KB" min="1" max="999999"
+                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500">
+              <span class="text-gray-400 text-sm whitespace-nowrap">KB minimum</span>
+            </div>
+          </div>
+
+          <!-- Inflate button -->
+          <button onclick="inflateFile()" id="inflate-btn"
+            class="w-full bg-brand-500 hover:bg-brand-600 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2">
+            <i data-lucide="trending-up" class="w-5 h-5"></i>
+            Inflate File
+          </button>
+
+          <!-- Progress -->
+          <div id="inflate-progress" class="hidden flex items-center gap-3 text-sm text-gray-400">
+            <span class="spinner"></span>
+            <span>Inflating file...</span>
+          </div>
+        </div>
+
+        <!-- Right: Result -->
+        <div id="inflate-result" class="hidden">
+          <div class="glass-card p-6 h-full flex flex-col justify-between">
+            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-5 h-5 text-green-400"></i>
+              Inflation Complete
+            </h3>
+            <div class="grid grid-cols-2 gap-4 mb-6">
+              <div class="bg-gray-800/60 rounded-lg p-4 text-center">
+                <p class="text-xs text-gray-400 mb-1">Original Size</p>
+                <p id="inflate-orig-size" class="text-xl font-bold text-gray-200"></p>
+              </div>
+              <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
+                <p class="text-xs text-green-400 mb-1">New Size</p>
+                <p id="inflate-new-size" class="text-xl font-bold text-green-400"></p>
+              </div>
+            </div>
+            <button id="inflate-download-btn" onclick="downloadResult('inflate')"
+              class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2">
+              <i data-lucide="download" class="w-5 h-5"></i>
+              Download Inflated File
+            </button>
+          </div>
+        </div>
+
+        <div id="inflate-placeholder" class="glass-card p-6 flex flex-col items-center justify-center text-center min-h-48">
+          <i data-lucide="trending-up" class="w-16 h-16 text-gray-700 mb-3"></i>
+          <p class="text-gray-500">Your inflated file will appear here</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-800 mt-12 py-6 text-center text-xs text-gray-500">
+    <p>SecureBolt Tools — 100% client-side. No data ever leaves your device.</p>
+  </footer>
+
+  <!-- Toast container -->
+  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Hidden canvas for processing -->
+  <canvas id="processing-canvas" class="hidden"></canvas>
+
+  <script>
+    // ==================== GLOBAL STATE ====================
+    const state = {
+      compress: { file: null, resultBlob: null, resultFilename: null },
+      image:    { file: null, resultBlob: null, resultFilename: null },
+      split:    { file: null, splitResults: [], pageCount: 0, zipBlob: null },
+      inflate:  { file: null, resultBlob: null, resultFilename: null }
+    };
+
+    // ==================== THEME ====================
+    function initTheme() {
+      const saved = localStorage.getItem('theme') || 'dark';
+      if (saved === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      updateThemeIcons();
+    }
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      updateThemeIcons();
+    }
+
+    function updateThemeIcons() {
+      const isDark = document.documentElement.classList.contains('dark');
+      document.getElementById('icon-sun').classList.toggle('hidden', isDark);
+      document.getElementById('icon-moon').classList.toggle('hidden', !isDark);
+    }
+
+    // ==================== TAB SWITCHING ====================
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('bg-brand-500', 'text-white');
+        b.classList.add('text-gray-400');
+      });
+      document.getElementById('tab-' + tabId).classList.add('active');
+      const activeBtn = document.getElementById('tab-btn-' + tabId);
+      activeBtn.classList.add('bg-brand-500', 'text-white');
+      activeBtn.classList.remove('text-gray-400');
+    }
+
+    // ==================== TOAST ====================
+    function showToast(message, type = 'info') {
+      const colors = {
+        info:    'bg-gray-800 border-gray-600 text-gray-200',
+        success: 'bg-green-900/80 border-green-600 text-green-200',
+        error:   'bg-red-900/80 border-red-600 text-red-200',
+        warning: 'bg-yellow-900/80 border-yellow-600 text-yellow-200'
+      };
+      const icons = { info: 'info', success: 'check-circle', error: 'x-circle', warning: 'alert-triangle' };
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto flex items-center gap-3 border rounded-lg px-4 py-3 text-sm shadow-xl min-w-64 max-w-sm toast-enter ${colors[type]}`;
+      toast.innerHTML = `<i data-lucide="${icons[type]}" class="w-4 h-4 flex-shrink-0"></i><span>${message}</span>`;
+      container.appendChild(toast);
+      lucide.createIcons({ nodes: [toast] });
+      setTimeout(() => {
+        toast.classList.remove('toast-enter');
+        toast.classList.add('toast-exit');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // ==================== FILE UTILS ====================
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function readFileAsArrayBuffer(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
+    function downloadResult(module) {
+      const s = state[module];
+      if (s.resultBlob) {
+        triggerDownload(s.resultBlob, s.resultFilename);
+      }
+    }
+
+    // ==================== DRAG & DROP ====================
+    function handleDragOver(event, zoneId) {
+      event.preventDefault();
+      event.stopPropagation();
+      document.getElementById(zoneId).classList.add('drag-active');
+    }
+
+    function handleDragLeave(event, zoneId) {
+      event.preventDefault();
+      document.getElementById(zoneId).classList.remove('drag-active');
+    }
+
+    function handleDrop(event, module, allowedTypes) {
+      event.preventDefault();
+      event.stopPropagation();
+      const zoneId = module + '-drop-zone';
+      document.getElementById(zoneId).classList.remove('drag-active');
+      const files = event.dataTransfer.files;
+      if (!files.length) return;
+      const file = files[0];
+      if (!validateFileType(file, allowedTypes)) return;
+      setFile(module, file);
+    }
+
+    function handleFileSelect(input, module, allowedTypes) {
+      const file = input.files[0];
+      if (!file) return;
+      if (!validateFileType(file, allowedTypes)) {
+        input.value = '';
+        return;
+      }
+      setFile(module, file);
+    }
+
+    function validateFileType(file, allowedTypes) {
+      const type = file.type;
+      // Also check extension for PDFs that may report as octet-stream
+      const name = file.name.toLowerCase();
+      const isPdf = name.endsWith('.pdf') || type === 'application/pdf';
+      const isAllowed = allowedTypes.some(t => {
+        if (t === 'application/pdf') return isPdf;
+        return type === t || type.startsWith(t.split('/')[0]);
+      });
+      if (!isAllowed) {
+        showToast(`Invalid file type. Allowed: ${allowedTypes.join(', ')}`, 'error');
+        return false;
+      }
+      return true;
+    }
+
+    async function setFile(module, file) {
+      state[module].file = file;
+      // Reset results
+      state[module].resultBlob = null;
+      state[module].resultFilename = null;
+
+      const infoEl = document.getElementById(module + '-file-info');
+      document.getElementById(module + '-file-name').textContent = file.name;
+      document.getElementById(module + '-file-size').textContent = formatBytes(file.size);
+      infoEl.classList.remove('hidden');
+
+      // Module-specific side effects
+      if (module === 'split') {
+        await loadSplitPDFInfo(file);
+      }
+
+      hideResult(module);
+      showToast(`${file.name} loaded`, 'success');
+    }
+
+    function clearFile(module) {
+      state[module].file = null;
+      state[module].resultBlob = null;
+      document.getElementById(module + '-file-info').classList.add('hidden');
+      hideResult(module);
+      // Reset file input
+      const inp = document.getElementById(module + '-file-input');
+      if (inp) inp.value = '';
+    }
+
+    function hideResult(module) {
+      const resultEl = document.getElementById(module + '-result');
+      const placeholderEl = document.getElementById(module + '-placeholder');
+      if (resultEl) resultEl.classList.add('hidden');
+      if (placeholderEl) placeholderEl.classList.remove('hidden');
+    }
+
+    function showResult(module) {
+      const resultEl = document.getElementById(module + '-result');
+      const placeholderEl = document.getElementById(module + '-placeholder');
+      if (resultEl) resultEl.classList.remove('hidden');
+      if (placeholderEl) placeholderEl.classList.add('hidden');
+    }
+
+    function setLoading(module, loading, progressText) {
+      const btn = document.getElementById(module + '-btn');
+      const progressEl = document.getElementById(module + '-progress');
+      const progTextEl = document.getElementById(module + '-progress-text');
+      if (loading) {
+        btn.disabled = true;
+        btn.classList.add('opacity-60', 'cursor-not-allowed');
+        progressEl.classList.remove('hidden');
+        if (progressText && progTextEl) progTextEl.textContent = progressText;
+      } else {
+        btn.disabled = false;
+        btn.classList.remove('opacity-60', 'cursor-not-allowed');
+        progressEl.classList.add('hidden');
+      }
+    }
+
+    // ==================== MODULE 1: PDF COMPRESSOR ====================
+    function setCompressTarget(kb) {
+      document.getElementById('compress-target-kb').value = kb;
+    }
+
+    async function compressPDF() {
+      const file = state.compress.file;
+      if (!file) { showToast('Please select a PDF file first.', 'warning'); return; }
+      const targetKB = parseFloat(document.getElementById('compress-target-kb').value);
+      if (!targetKB || targetKB < 10) { showToast('Please enter a valid target size (minimum 10 KB).', 'warning'); return; }
+
+      setLoading('compress', true, 'Loading PDF...');
+      hideResult('compress');
+
+      try {
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        const targetBytes = targetKB * 1024;
+        const origSize = file.size;
+
+        if (origSize <= targetBytes) {
+          showToast('File is already smaller than the target size!', 'info');
+          setLoading('compress', false);
+          return;
+        }
+
+        // Setup PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const updateProgress = (text) => {
+          const el = document.getElementById('compress-progress-text');
+          if (el) el.textContent = text;
+        };
+
+        updateProgress('Loading PDF document...');
+        const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const numPages = pdfDoc.numPages;
+
+        // Helper: render PDF to jsPDF at given scale and quality, return blob
+        async function renderToJsPDF(scale, quality) {
+          const { jsPDF } = window.jspdf;
+          const canvas = document.getElementById('processing-canvas');
+          const ctx = canvas.getContext('2d');
+          let doc = null;
+
+          for (let i = 1; i <= numPages; i++) {
+            const page = await pdfDoc.getPage(i);
+            const viewport = page.getViewport({ scale });
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: ctx, viewport }).promise;
+
+            const imgData = canvas.toDataURL('image/jpeg', quality);
+            const pxW = viewport.width;
+            const pxH = viewport.height;
+
+            // Convert px to mm at 72 dpi (PDF points to mm: 1pt = 0.352778mm)
+            const mmW = (pxW / scale) * 0.352778;
+            const mmH = (pxH / scale) * 0.352778;
+
+            const orientation = mmW > mmH ? 'l' : 'p';
+            if (i === 1) {
+              doc = new jsPDF({ orientation, unit: 'mm', format: [mmW, mmH], compress: true });
+            } else {
+              doc.addPage([mmW, mmH], orientation);
+            }
+            doc.addImage(imgData, 'JPEG', 0, 0, mmW, mmH, undefined, 'FAST');
+          }
+          return doc ? doc.output('blob') : null;
+        }
+
+        // Binary search for best scale/quality combination
+        updateProgress('Finding optimal compression settings...');
+
+        let bestBlob = null;
+        let bestSize = Infinity;
+        let lo = 0.3, hi = 1.5;
+
+        // Phase 1: Try different scales at medium quality
+        for (let iter = 0; iter < 8; iter++) {
+          const mid = (lo + hi) / 2;
+          updateProgress(`Optimizing... (attempt ${iter + 1}/8)`);
+          const blob = await renderToJsPDF(mid, 0.7);
+          const sz = blob.size;
+
+          if (Math.abs(sz - targetBytes) < Math.abs(bestSize - targetBytes)) {
+            bestBlob = blob;
+            bestSize = sz;
+          }
+
+          if (sz > targetBytes) hi = mid;
+          else lo = mid;
+
+          // Early exit if close enough (within 5%)
+          if (Math.abs(sz - targetBytes) / targetBytes < 0.05) break;
+        }
+
+        // Phase 2: Fine-tune quality at the best scale
+        const bestScale = (lo + hi) / 2;
+        let qLo = 0.3, qHi = 0.95;
+
+        for (let iter = 0; iter < 6; iter++) {
+          const qMid = (qLo + qHi) / 2;
+          updateProgress(`Fine-tuning quality... (${iter + 1}/6)`);
+          const blob = await renderToJsPDF(bestScale, qMid);
+          const sz = blob.size;
+
+          if (Math.abs(sz - targetBytes) < Math.abs(bestSize - targetBytes)) {
+            bestBlob = blob;
+            bestSize = sz;
+          }
+
+          if (sz > targetBytes) qHi = qMid;
+          else qLo = qMid;
+
+          if (Math.abs(sz - targetBytes) / targetBytes < 0.03) break;
+        }
+
+        if (!bestBlob) throw new Error('Could not generate compressed PDF');
+
+        const baseName = file.name.replace(/\.pdf$/i, '');
+        state.compress.resultBlob = bestBlob;
+        state.compress.resultFilename = `${baseName}_compressed.pdf`;
+
+        // Show result
+        document.getElementById('compress-orig-size').textContent = formatBytes(origSize);
+        document.getElementById('compress-new-size').textContent = formatBytes(bestBlob.size);
+        const reduction = Math.max(0, ((origSize - bestBlob.size) / origSize * 100));
+        document.getElementById('compress-reduction-pct').textContent = reduction.toFixed(1) + '% smaller';
+        document.getElementById('compress-reduction-bar').style.width = Math.min(100, reduction) + '%';
+
+        showResult('compress');
+        showToast('PDF compressed successfully!', 'success');
+        lucide.createIcons();
+
+      } catch (err) {
+        console.error(err);
+        showToast('Error compressing PDF: ' + err.message, 'error');
+      } finally {
+        setLoading('compress', false);
+      }
+    }
+
+    // ==================== MODULE 2: IMAGE COMPRESSOR ====================
+    async function compressImage() {
+      const file = state.image.file;
+      if (!file) { showToast('Please select an image file first.', 'warning'); return; }
+      const targetKB = parseFloat(document.getElementById('image-target-kb').value);
+      if (!targetKB || targetKB < 1) { showToast('Please enter a valid target size.', 'warning'); return; }
+
+      const mimeType = document.getElementById('image-format').value;
+      const targetBytes = targetKB * 1024;
+
+      setLoading('image', true);
+      hideResult('image');
+
+      try {
+        // Load image
+        const url = URL.createObjectURL(file);
+        const img = await new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = reject;
+          image.src = url;
+        });
+        URL.revokeObjectURL(url);
+
+        // Show original preview
+        const origPreview = document.getElementById('image-preview-orig');
+        const origUrl = URL.createObjectURL(file);
+        origPreview.src = origUrl;
+        setTimeout(() => URL.revokeObjectURL(origUrl), 5000);
+
+        const canvas = document.getElementById('processing-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Helper: draw image at given dimensions, return data URL
+        function drawAndEncode(w, h, quality) {
+          canvas.width = w;
+          canvas.height = h;
+          ctx.clearRect(0, 0, w, h);
+          if (mimeType === 'image/jpeg') {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+          }
+          ctx.drawImage(img, 0, 0, w, h);
+          return canvas.toDataURL(mimeType, quality);
+        }
+
+        function dataUrlToBytes(dataUrl) {
+          const base64 = dataUrl.split(',')[1];
+          return Math.ceil(base64.length * 3 / 4);
+        }
+
+        let resultDataUrl;
+        const origW = img.naturalWidth;
+        const origH = img.naturalHeight;
+
+        if (mimeType === 'image/png') {
+          // PNG is lossless — reduce dimensions iteratively
+          let scale = 1.0;
+          let lo = 0.05, hi = 1.0;
+
+          for (let iter = 0; iter < 20; iter++) {
+            const mid = (lo + hi) / 2;
+            const dataUrl = drawAndEncode(Math.round(origW * mid), Math.round(origH * mid), 1.0);
+            const sz = dataUrlToBytes(dataUrl);
+            if (sz <= targetBytes) {
+              lo = mid;
+              resultDataUrl = dataUrl;
+            } else {
+              hi = mid;
+            }
+            if (Math.abs(sz - targetBytes) / targetBytes < 0.03) {
+              resultDataUrl = dataUrl;
+              break;
+            }
+          }
+          if (!resultDataUrl) {
+            resultDataUrl = drawAndEncode(Math.round(origW * lo), Math.round(origH * lo), 1.0);
+          }
+        } else {
+          // JPEG/WEBP: binary search quality first at original size
+          let lo = 0.01, hi = 1.0;
+          let bestUrl = null;
+
+          for (let iter = 0; iter < 20; iter++) {
+            const mid = (lo + hi) / 2;
+            const dataUrl = drawAndEncode(origW, origH, mid);
+            const sz = dataUrlToBytes(dataUrl);
+            if (sz <= targetBytes) {
+              lo = mid;
+              bestUrl = dataUrl;
+            } else {
+              hi = mid;
+            }
+            if (hi - lo < 0.005) break;
+          }
+
+          if (bestUrl) {
+            resultDataUrl = bestUrl;
+          } else {
+            // Even lowest quality at original size is too big — reduce dimensions too
+            let scaleLo = 0.1, scaleHi = 1.0;
+            for (let iter = 0; iter < 15; iter++) {
+              const sMid = (scaleLo + scaleHi) / 2;
+              const dataUrl = drawAndEncode(Math.round(origW * sMid), Math.round(origH * sMid), 0.4);
+              const sz = dataUrlToBytes(dataUrl);
+              if (sz <= targetBytes) {
+                scaleLo = sMid;
+                resultDataUrl = dataUrl;
+              } else {
+                scaleHi = sMid;
+              }
+              if (Math.abs(sz - targetBytes) / targetBytes < 0.05) { resultDataUrl = dataUrl; break; }
+            }
+            if (!resultDataUrl) {
+              resultDataUrl = drawAndEncode(Math.round(origW * scaleLo), Math.round(origH * scaleLo), 0.4);
+            }
+          }
+        }
+
+        // Convert data URL to blob
+        const response = await fetch(resultDataUrl);
+        const blob = await response.blob();
+
+        const ext = mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/png' ? 'png' : 'webp';
+        const baseName = file.name.replace(/\.[^.]+$/, '');
+        state.image.resultBlob = blob;
+        state.image.resultFilename = `${baseName}_compressed.${ext}`;
+
+        // Show result
+        document.getElementById('image-preview-out').src = resultDataUrl;
+        document.getElementById('image-orig-size').textContent = formatBytes(file.size);
+        document.getElementById('image-new-size').textContent = formatBytes(blob.size);
+
+        showResult('image');
+        showToast('Image processed successfully!', 'success');
+        lucide.createIcons();
+
+      } catch (err) {
+        console.error(err);
+        showToast('Error processing image: ' + err.message, 'error');
+      } finally {
+        setLoading('image', false);
+      }
+    }
+
+    // ==================== MODULE 3: PDF SPLITTER ====================
+    // Handle split mode radio toggle
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('input[name="split-mode"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+          document.getElementById('split-range-input-container').classList.toggle('hidden', radio.value !== 'range');
+          document.getElementById('split-every-n-container').classList.toggle('hidden', radio.value !== 'every-n');
+        });
+      });
+    });
+
+    async function loadSplitPDFInfo(file) {
+      try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const ab = await readFileAsArrayBuffer(file);
+        const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+        state.split.pageCount = pdf.numPages;
+        document.getElementById('split-page-badge').textContent = pdf.numPages + ' pages';
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function parsePageRanges(rangeStr, totalPages) {
+      const groups = [];
+      const parts = rangeStr.split(',').map(s => s.trim()).filter(Boolean);
+      for (const part of parts) {
+        if (part.includes('-')) {
+          const [startStr, endStr] = part.split('-');
+          const start = parseInt(startStr.trim(), 10);
+          const end = parseInt(endStr.trim(), 10);
+          if (isNaN(start) || isNaN(end) || start < 1 || end > totalPages || start > end) {
+            throw new Error(`Invalid range: "${part}"`);
+          }
+          const pages = [];
+          for (let i = start; i <= end; i++) pages.push(i - 1); // 0-indexed
+          groups.push(pages);
+        } else {
+          const pageNum = parseInt(part, 10);
+          if (isNaN(pageNum) || pageNum < 1 || pageNum > totalPages) {
+            throw new Error(`Invalid page number: "${part}"`);
+          }
+          groups.push([pageNum - 1]);
+        }
+      }
+      return groups;
+    }
+
+    async function splitPDF() {
+      const file = state.split.file;
+      if (!file) { showToast('Please select a PDF file first.', 'warning'); return; }
+
+      const mode = document.querySelector('input[name="split-mode"]:checked').value;
+
+      setLoading('split', true);
+      hideResult('split');
+
+      try {
+        const bytes = await readFileAsArrayBuffer(file);
+        const srcDoc = await PDFLib.PDFDocument.load(bytes);
+        const totalPages = srcDoc.getPageCount();
+        state.split.pageCount = totalPages;
+
+        let pageGroups = []; // Array of arrays of 0-indexed page numbers
+
+        if (mode === 'range') {
+          const rangeStr = document.getElementById('split-range-input').value.trim();
+          if (!rangeStr) { showToast('Please enter page ranges.', 'warning'); setLoading('split', false); return; }
+          pageGroups = parsePageRanges(rangeStr, totalPages);
+          if (!pageGroups.length) { showToast('No valid pages found in range.', 'warning'); setLoading('split', false); return; }
+
+        } else if (mode === 'all') {
+          for (let i = 0; i < totalPages; i++) pageGroups.push([i]);
+
+        } else if (mode === 'every-n') {
+          const n = parseInt(document.getElementById('split-every-n-input').value, 10);
+          if (!n || n < 1) { showToast('Please enter a valid N value.', 'warning'); setLoading('split', false); return; }
+          for (let i = 0; i < totalPages; i += n) {
+            const group = [];
+            for (let j = i; j < Math.min(i + n, totalPages); j++) group.push(j);
+            pageGroups.push(group);
+          }
+        }
+
+        const baseName = file.name.replace(/\.pdf$/i, '');
+        const results = [];
+
+        for (let gi = 0; gi < pageGroups.length; gi++) {
+          const group = pageGroups[gi];
+          const newDoc = await PDFLib.PDFDocument.create();
+          const copiedPages = await newDoc.copyPages(srcDoc, group);
+          copiedPages.forEach(p => newDoc.addPage(p));
+          const pdfBytes = await newDoc.save();
+          const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+
+          let filename;
+          if (mode === 'all') {
+            filename = `${baseName}_page${group[0] + 1}.pdf`;
+          } else if (mode === 'every-n') {
+            filename = `${baseName}_pages${group[0] + 1}-${group[group.length - 1] + 1}.pdf`;
+          } else {
+            filename = `${baseName}_split${gi + 1}.pdf`;
+          }
+
+          results.push({ blob, filename, size: blob.size });
+        }
+
+        state.split.splitResults = results;
+
+        // Show results list
+        const listEl = document.getElementById('split-files-list');
+        listEl.innerHTML = '';
+        results.forEach((r, idx) => {
+          const item = document.createElement('div');
+          item.className = 'flex items-center gap-3 bg-gray-800/50 border border-gray-700 rounded-lg px-3 py-2.5';
+          item.innerHTML = `
+            <i data-lucide="file-text" class="w-4 h-4 text-brand-500 flex-shrink-0"></i>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium truncate">${r.filename}</p>
+              <p class="text-xs text-gray-400">${formatBytes(r.size)}</p>
+            </div>
+            <button onclick="downloadSplitFile(${idx})" class="bg-brand-500/20 hover:bg-brand-500 text-brand-400 hover:text-white border border-brand-500/40 text-xs px-3 py-1 rounded-md transition-all flex items-center gap-1 whitespace-nowrap">
+              <i data-lucide="download" class="w-3 h-3"></i>Download
+            </button>
+          `;
+          listEl.appendChild(item);
+        });
+
+        // Hide download-all if only 1 file
+        document.getElementById('split-download-all-btn').classList.toggle('hidden', results.length <= 1);
+
+        showResult('split');
+        showToast(`Split into ${results.length} PDF${results.length > 1 ? 's' : ''}!`, 'success');
+        lucide.createIcons();
+
+      } catch (err) {
+        console.error(err);
+        showToast('Error splitting PDF: ' + err.message, 'error');
+      } finally {
+        setLoading('split', false);
+      }
+    }
+
+    function downloadSplitFile(idx) {
+      const r = state.split.splitResults[idx];
+      if (r) triggerDownload(r.blob, r.filename);
+    }
+
+    async function downloadAllSplitZip() {
+      const results = state.split.splitResults;
+      if (!results.length) return;
+      try {
+        const zip = new JSZip();
+        for (const r of results) {
+          const ab = await r.blob.arrayBuffer();
+          zip.file(r.filename, ab);
+        }
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const baseName = state.split.file.name.replace(/\.pdf$/i, '');
+        triggerDownload(zipBlob, `${baseName}_split.zip`);
+        showToast('ZIP downloaded!', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('Error creating ZIP: ' + err.message, 'error');
+      }
+    }
+
+    // ==================== MODULE 4: FILE INFLATOR ====================
+    function setInflateTarget(kb) {
+      document.getElementById('inflate-target-kb').value = kb;
+    }
+
+    // Generate a deterministic padding string of given byte count using safe base64 chars
+    function generatePaddingString(byteCount) {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+      let result = '';
+      for (let i = 0; i < byteCount; i++) {
+        result += chars[i % chars.length];
+      }
+      return result;
+    }
+
+    async function inflateFile() {
+      const file = state.inflate.file;
+      if (!file) { showToast('Please select a file first.', 'warning'); return; }
+      const targetKB = parseFloat(document.getElementById('inflate-target-kb').value);
+      if (!targetKB || targetKB < 1) { showToast('Please enter a valid target size.', 'warning'); return; }
+
+      const targetBytes = targetKB * 1024;
+      const origSize = file.size;
+
+      if (origSize >= targetBytes) {
+        showToast('File is already at or above the target size!', 'info');
+        return;
+      }
+
+      setLoading('inflate', true);
+      hideResult('inflate');
+
+      try {
+        const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+        let resultBlob;
+        let resultFilename;
+
+        if (isPDF) {
+          resultBlob = await inflatePDF(file, targetBytes);
+          const baseName = file.name.replace(/\.pdf$/i, '');
+          resultFilename = `${baseName}_inflated.pdf`;
+
+        } else {
+          // Image inflation
+          resultBlob = await inflateImage(file, targetBytes);
+          const ext = file.name.split('.').pop();
+          const baseName = file.name.replace(/\.[^.]+$/, '');
+          resultFilename = `${baseName}_inflated.${ext}`;
+        }
+
+        state.inflate.resultBlob = resultBlob;
+        state.inflate.resultFilename = resultFilename;
+
+        document.getElementById('inflate-orig-size').textContent = formatBytes(origSize);
+        document.getElementById('inflate-new-size').textContent = formatBytes(resultBlob.size);
+
+        showResult('inflate');
+        showToast('File inflated successfully!', 'success');
+        lucide.createIcons();
+
+      } catch (err) {
+        console.error(err);
+        showToast('Error inflating file: ' + err.message, 'error');
+      } finally {
+        setLoading('inflate', false);
+      }
+    }
+
+    async function inflatePDF(file, targetBytes) {
+      const bytes = await readFileAsArrayBuffer(file);
+      const doc = await PDFLib.PDFDocument.load(bytes);
+
+      // Add padding via metadata fields iteratively until we hit the target
+      let attempt = 0;
+      let currentBytes = bytes.byteLength;
+      let needed = targetBytes - currentBytes;
+
+      while (needed > 0 && attempt < 20) {
+        attempt++;
+        // Add metadata with padding. Each iteration adds more.
+        const paddingStr = generatePaddingString(needed + 200); // overshoot slightly
+        doc.setSubject(paddingStr.substring(0, Math.min(needed + 200, 65000)));
+
+        // If we need a lot more, also set keywords and creator
+        if (needed > 65000) {
+          doc.setKeywords([generatePaddingString(Math.min(needed, 65000))]);
+        }
+        if (needed > 130000) {
+          doc.setProducer(generatePaddingString(Math.min(needed - 130000, 65000)));
+        }
+
+        const savedBytes = await doc.save();
+        currentBytes = savedBytes.byteLength;
+        needed = targetBytes - currentBytes;
+
+        if (currentBytes >= targetBytes) {
+          return new Blob([savedBytes], { type: 'application/pdf' });
+        }
+      }
+
+      // If metadata approach still not enough, append PDF comment lines after %%EOF
+      const finalBytes = await doc.save();
+      let totalBytes = finalBytes.byteLength;
+      const stillNeeded = targetBytes - totalBytes;
+
+      if (stillNeeded > 0) {
+        // Append safe comment padding after the PDF
+        const padding = new TextEncoder().encode('\n%% ' + generatePaddingString(stillNeeded));
+        const combined = new Uint8Array(totalBytes + padding.length);
+        combined.set(new Uint8Array(finalBytes));
+        combined.set(padding, totalBytes);
+        return new Blob([combined], { type: 'application/pdf' });
+      }
+
+      return new Blob([finalBytes], { type: 'application/pdf' });
+    }
+
+    async function inflateImage(file, targetBytes) {
+      const mimeType = file.type || 'image/jpeg';
+      const url = URL.createObjectURL(file);
+      const img = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = url;
+      });
+      URL.revokeObjectURL(url);
+
+      const canvas = document.getElementById('processing-canvas');
+      const ctx = canvas.getContext('2d');
+      const origW = img.naturalWidth;
+      const origH = img.naturalHeight;
+
+      let scale = 1.0;
+      let resultDataUrl = null;
+
+      // First try max quality at original size
+      canvas.width = origW;
+      canvas.height = origH;
+      if (mimeType === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, origW, origH); }
+      ctx.drawImage(img, 0, 0, origW, origH);
+      const baseDataUrl = canvas.toDataURL(mimeType, 1.0);
+      const baseBytes = Math.ceil(baseDataUrl.split(',')[1].length * 3 / 4);
+
+      if (baseBytes >= targetBytes) {
+        const resp = await fetch(baseDataUrl);
+        return resp.blob();
+      }
+
+      // Increase scale by 1% increments until file is big enough
+      for (let pct = 1.01; pct <= 2.0; pct += 0.01) {
+        const w = Math.round(origW * pct);
+        const h = Math.round(origH * pct);
+        canvas.width = w;
+        canvas.height = h;
+        if (mimeType === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+        // Draw original image scaled to fill (then we keep the same visual content)
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL(mimeType, 1.0);
+        const sz = Math.ceil(dataUrl.split(',')[1].length * 3 / 4);
+        if (sz >= targetBytes) {
+          resultDataUrl = dataUrl;
+          break;
+        }
+      }
+
+      if (!resultDataUrl) {
+        // Final fallback: use the largest we got
+        const w = Math.round(origW * 2.0);
+        const h = Math.round(origH * 2.0);
+        canvas.width = w; canvas.height = h;
+        if (mimeType === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+        ctx.drawImage(img, 0, 0, w, h);
+        resultDataUrl = canvas.toDataURL(mimeType, 1.0);
+      }
+
+      const resp = await fetch(resultDataUrl);
+      return resp.blob();
+    }
+
+    // ==================== INIT ====================
+    document.addEventListener('DOMContentLoaded', () => {
+      initTheme();
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
+
